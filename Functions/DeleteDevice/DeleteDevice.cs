@@ -1,4 +1,8 @@
+using Dynamo.DeviceManagement.Constants;
 using Dynamo.DeviceManagement.DTO;
+using Dynamo.DeviceManagement.Models;
+using Dynamo.DeviceManagement.Repository;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -7,31 +11,46 @@ using Newtonsoft.Json;
 
 namespace Dynamo.DeviceManagement.Functions.DeleteDevice
 {
-    public class DeleteDevice(ILogger<DeleteDevice> logger)
+    public class DeleteDevice(ILogger<DeleteDevice> logger, IRepository<Device> deviceRepository)
     {
-        /// <summary>
-        /// Delete a device from DynamoDB
-        /// <param name="req">data from HttpRequest where device id is passed</param>
-        /// <returns>OkObjectResult</returns>
-        /// </summary>
+        private readonly ILogger<DeleteDevice> _logger = logger;
+        private readonly IRepository<Device> _deviceRepository = deviceRepository;
 
         [Function("DeleteDevice")]
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequestData req)
+        public async Task<IActionResult> RunAsync([HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "devices")] HttpRequestData req)
         {
-
             try
             {
-                string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-                var deviceId = JsonConvert.DeserializeObject<DeviceDto>(requestBody)!.Id;
+                var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+                var deviceDto = JsonConvert.DeserializeObject<DeviceDto>(requestBody);
 
-                logger.LogInformation($"{nameof(DeleteDevice)} - Received request: {JsonConvert.SerializeObject(deviceId)}");
+                _logger.LogInformation("Received request to delete device: {DeviceId}", deviceDto);
 
-                return new OkObjectResult("Welcome to Azure Functions!");
+                if (deviceDto == null)
+                {
+                    return new BadRequestObjectResult(new { Message = HttpErrorMessages.DeviceObjectIsNull });
+                }
+                else
+                {
+                    if (deviceDto.Device != null)
+                    {
+                        await _deviceRepository.DeleteAsync(deviceDto.Device.Id);
+                        return new OkObjectResult(new { Message = HttpResponseMessages.DeviceDeleted, Device = deviceDto });
+                    }
+
+                    return new BadRequestObjectResult(new { Message = HttpErrorMessages.DeviceObjectIsNull });
+
+                }
+
+            }
+            catch (JsonException)
+            {
+                return new BadRequestObjectResult(new { Message = HttpErrorMessages.InvalidJsonFormat });
             }
             catch (Exception ex)
             {
-                logger.LogError($"{nameof(DeleteDevice)} - Exception: {ex.Message}");
-                return new BadRequestResult();
+                _logger.LogError("An error occurred while deleting the device: {ErrorMessage}", ex.Message);
+                return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
         }
     }

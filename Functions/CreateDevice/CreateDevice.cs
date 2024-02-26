@@ -1,35 +1,58 @@
-using Dynamo.DeviceManagement.DTO;
+using Dynamo.DeviceManagement.Models;
+using Dynamo.DeviceManagement.Repository;
+using Dynamo.DeviceManagement.Constants;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Dynamo.DeviceManagement.DTO;
 
 namespace Dynamo.DeviceManagement.Functions.CreateDevice
 {
-    public class CreateDevice(ILogger<CreateDevice> logger)
+    public class CreateDevice(ILogger<CreateDevice> logger, IRepository<Device> deviceRepository)
     {
-        /// <summary>
-        /// Create a device from DynamoDB
-        /// <param name="req">data from HttpRequest where device data is passed</param>
-        /// <returns>OkObjectResult</returns>
-        /// </summary>
+        private readonly ILogger<CreateDevice> _logger = logger;
+        private readonly IRepository<Device> _deviceRepository = deviceRepository;
+
         [Function("CreateDevice")]
-        public async Task<IActionResult> Run([HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequestData req)
+        public async Task<IActionResult> RunAsync([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "devices")] HttpRequestData req)
         {
             try
             {
-                string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+                var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
                 var newDevice = JsonConvert.DeserializeObject<DeviceDto>(requestBody);
 
-                logger.LogInformation($"{nameof(CreateDevice)} - Received request: + {JsonConvert.SerializeObject(newDevice)}");
+                _logger.LogInformation("Received request to create device: {RequestBody}", requestBody);
 
-                return new OkObjectResult("Welcome to Azure Functions!");
+                if (newDevice == null)
+                {
+                    return new BadRequestObjectResult("Device object is null!");
+                }
+                else
+                {
+                    if (newDevice.Device != null)
+                    {
+                        var createdDevice = await _deviceRepository.AddAsync(newDevice.Device);
+
+                        _logger.LogInformation("Created device: {CreatedDevice}", $"{JsonConvert.SerializeObject(newDevice)}");
+
+                        return new OkObjectResult(new { Message = HttpResponseMessages.DeviceCreated, Device = createdDevice });
+                    }
+
+                    return new BadRequestObjectResult("Device object is null!");
+
+                }
+            }
+            catch (JsonException)
+            {
+                return new BadRequestObjectResult(new { Message = HttpErrorMessages.InvalidJsonFormat });
             }
             catch (Exception ex)
             {
-                logger.LogError($"{nameof(CreateDevice)} - Error: {ex.Message}");
-                return new BadRequestObjectResult(ex.Message);
+                _logger.LogError("An error occurred while creating the device: {ErrorMessage}", $" {ex.Message}");
+                return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
         }
     }
