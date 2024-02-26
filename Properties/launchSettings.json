@@ -2,7 +2,7 @@
   "profiles": {
     "Dynamo.DeviceManagement": {
       "commandName": "Project",
-      "commandLineArgs": "--port 7030",
+      "commandLineArgs": "--port 7030 --verbose",
       "launchBrowser": false
     }
   }

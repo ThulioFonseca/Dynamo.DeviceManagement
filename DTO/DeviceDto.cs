@@ -1,11 +1,17 @@
-﻿namespace Dynamo.DeviceManagement.DTO
+﻿using Dynamo.DeviceManagement.Models;
+using System.ComponentModel.DataAnnotations;
+
+namespace Dynamo.DeviceManagement.DTO
 {
     public class DeviceDto
     {
-        public  string? Id { get; set; }
+        [Required]
+        public Device? Device { get; set; }
 
-        public  string? Alias { get; set; }
+        [Required]
+        public required string User { get; set; }
 
-        public  string? MacAddress { get; set; }
+        [Required]
+        public DateTime Date { get; set; }
     }
 }
